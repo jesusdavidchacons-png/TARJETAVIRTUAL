@@ -3,84 +3,73 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>Experiencia AR - CAMIMPEG</title>
+  <title>AR CAMIMPEG</title>
   
-  <!-- Librerías con versiones 100% compatibles -->
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-    body {
-      margin: 0;
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%;
+      height: 100%;
       overflow: hidden;
-      background: #000;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: transparent !important;
     }
 
-    /* Botón flotante para regresar */
+    /* Forzar que el video que genera la cámara se muestre sí o sí */
+    video:not(#camimpeg-video) {
+      position: absolute !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover !important;
+      z-index: -2 !important;
+      display: block !important;
+    }
+
+    /* Caja de diagnóstico en pantalla para ver el error real */
+    #debug-box {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      right: 10px;
+      padding: 10px 14px;
+      background: rgba(0, 0, 0, 0.85);
+      color: #00ff66;
+      font-family: monospace;
+      font-size: 11px;
+      border-radius: 8px;
+      z-index: 999999;
+      pointer-events: none;
+      word-break: break-all;
+    }
+
     #back-btn {
       position: fixed;
-      top: 16px;
-      left: 16px;
+      bottom: 20px;
+      left: 20px;
       z-index: 10000;
-      background: rgba(0, 0, 0, 0.65);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
+      background: rgba(0,0,0,0.7);
       color: #fff;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      border-radius: 8px;
-      padding: 8px 14px;
-      font-size: 0.85rem;
+      padding: 10px 18px;
+      border-radius: 20px;
       text-decoration: none;
-    }
-
-    /* Mensaje guía inferior */
-    #instruction-card {
-      position: fixed;
-      bottom: 24px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 10000;
-      background: rgba(15, 17, 23, 0.85);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 30px;
-      padding: 10px 20px;
-      color: #fff;
-      font-size: 0.85rem;
-      pointer-events: none;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      white-space: nowrap;
-    }
-
-    .pulse {
-      width: 8px;
-      height: 8px;
-      background: #22c55e;
-      border-radius: 50%;
-      box-shadow: 0 0 8px #22c55e;
+      font-size: 14px;
+      font-family: sans-serif;
+      border: 1px solid rgba(255,255,255,0.2);
     }
   </style>
 </head>
 <body>
 
+  <div id="debug-box">Iniciando sistema...</div>
   <a href="index.html" id="back-btn">← Volver</a>
 
-  <div id="instruction-card">
-    <span class="pulse"></span>
-    Apunta la cámara a la tarjeta
-  </div>
-
   <a-scene
-    mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiScanning: yes; uiLoading: yes;"
+    mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; filterMinCF:0.0001; filterBeta: 0.001;"
+    embedded
     color-space="sRGB"
     renderer="colorManagement: true, physicallyCorrectLights: true"
     vr-mode-ui="enabled: false"
@@ -100,7 +89,6 @@
 
     <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-    <!-- Target 0: Tarjeta de presentación -->
     <a-entity mindar-image-target="targetIndex: 0" id="card-target">
       <a-video
         src="#camimpeg-video"
@@ -113,21 +101,52 @@
   </a-scene>
 
   <script>
+    const debugBox = document.querySelector('#debug-box');
+    const log = (msg, isError = false) => {
+      debugBox.innerHTML += `<br>${isError ? '<span style="color:#ff4d4d">✖ ' : '✔ '}${msg}</span>`;
+    };
+
+    // 1. Diagnóstico de HTTPS y Navegador
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+      log('ERROR: La cámara requiere HTTPS obligatorio.', true);
+    } else {
+      log('HTTPS verificado.');
+    }
+
+    // 2. Verificar soporte de cámara WebRTC
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      log('Navegador no soporta cámara directa (¿In-App browser?). Abre en Safari/Chrome.', true);
+    } else {
+      log('Soporte de cámara detectado.');
+    }
+
+    // 3. Captura de eventos MindAR
+    const sceneEl = document.querySelector('a-scene');
     const video = document.querySelector('#camimpeg-video');
     const cardTarget = document.querySelector('#card-target');
 
-    // Desbloquear audio con el primer toque en cualquier parte de la pantalla
-    document.body.addEventListener('click', () => {
+    sceneEl.addEventListener('renderstart', () => {
+      log('Escena 3D iniciada.');
+    });
+
+    sceneEl.addEventListener('arReady', () => {
+      log('¡MindAR listo! Cámara activa.');
+    });
+
+    sceneEl.addEventListener('arError', (event) => {
+      log('Error al cargar targets.mind (verifica el archivo en el servidor).', true);
+    });
+
+    // Desbloquear audio con tap
+    window.addEventListener('touchstart', () => {
       if (video.paused && !video.ended) {
-        video.play().catch(() => {});
+        video.play().then(() => video.pause()).catch(() => {});
       }
     }, { once: true });
 
-    // Control de video al detectar/perder la tarjeta física
     cardTarget.addEventListener('targetFound', () => {
-      video.play().catch((err) => {
-        console.warn('Playback bloqueado por el navegador hasta interacción:', err);
-      });
+      log('Tarjeta detectada');
+      video.play().catch(e => log('Error video: ' + e.message, true));
     });
 
     cardTarget.addEventListener('targetLost', () => {
