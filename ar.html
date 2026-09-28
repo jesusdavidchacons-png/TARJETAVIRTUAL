@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <title>Experiencia AR - CAMIMPEG</title>
   
-  <!-- Dependencias: A-Frame + MindAR Image -->
-  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <!-- Librerías con versiones 100% compatibles -->
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
   <style>
@@ -16,96 +16,77 @@
       padding: 0;
     }
     body {
+      margin: 0;
       overflow: hidden;
       background: #000;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
 
-    /* Pantalla previa para autorizar cámara y desbloquear audio en Safari/Chrome */
-    #start-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(10, 12, 16, 0.94);
-      z-index: 99999;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-      text-align: center;
-      color: #fff;
-    }
-
-    #start-overlay h2 {
-      font-size: 1.35rem;
-      font-weight: 700;
-      margin-bottom: 8px;
-      letter-spacing: -0.02em;
-    }
-
-    #start-overlay p {
-      font-size: 0.95rem;
-      color: #a1a1aa;
-      max-width: 280px;
-      line-height: 1.4;
-      margin-bottom: 24px;
-    }
-
-    .btn-start {
-      background: #ffffff;
-      color: #09090b;
-      font-size: 1rem;
-      font-weight: 600;
-      padding: 14px 28px;
-      border-radius: 9999px;
-      border: none;
-      cursor: pointer;
-      box-shadow: 0 4px 18px rgba(255, 255, 255, 0.2);
-      transition: transform 0.1s ease;
-    }
-
-    .btn-start:active {
-      transform: scale(0.96);
-    }
-
-    /* Botón flotante para regresar al index si el usuario lo desea */
+    /* Botón flotante para regresar */
     #back-btn {
       position: fixed;
-      top: 18px;
-      left: 18px;
-      z-index: 1000;
-      background: rgba(0, 0, 0, 0.6);
+      top: 16px;
+      left: 16px;
+      z-index: 10000;
+      background: rgba(0, 0, 0, 0.65);
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
       color: #fff;
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.2);
       border-radius: 8px;
       padding: 8px 14px;
       font-size: 0.85rem;
       text-decoration: none;
     }
+
+    /* Mensaje guía inferior */
+    #instruction-card {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10000;
+      background: rgba(15, 17, 23, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 30px;
+      padding: 10px 20px;
+      color: #fff;
+      font-size: 0.85rem;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+
+    .pulse {
+      width: 8px;
+      height: 8px;
+      background: #22c55e;
+      border-radius: 50%;
+      box-shadow: 0 0 8px #22c55e;
+    }
   </style>
 </head>
 <body>
 
-  <!-- Overlay de interacción de usuario requerida -->
-  <div id="start-overlay">
-    <h2>Activar Cámara AR</h2>
-    <p>Toca para iniciar el escáner y habilitar el audio del reel.</p>
-    <button class="btn-start" id="btn-start">Comenzar</button>
-  </div>
-
   <a href="index.html" id="back-btn">← Volver</a>
 
+  <div id="instruction-card">
+    <span class="pulse"></span>
+    Apunta la cámara a la tarjeta
+  </div>
+
   <a-scene
-    mindar-image="imageTargetSrc: ./targets.mind; autoStart: false; uiScanning: yes; uiLoading: no;"
+    mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiScanning: yes; uiLoading: yes;"
     color-space="sRGB"
     renderer="colorManagement: true, physicallyCorrectLights: true"
     vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false">
     
     <a-assets>
-      <!-- Video local con preload y soporte inline para navegadores móviles -->
       <video
         id="camimpeg-video"
         src="./camimpegreel.mp4"
@@ -119,9 +100,8 @@
 
     <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-    <!-- Target 0 configurado para encajar sobre la tarjeta física -->
+    <!-- Target 0: Tarjeta de presentación -->
     <a-entity mindar-image-target="targetIndex: 0" id="card-target">
-      <!-- Ajuste de ancho y alto (relación estándar 1.6:1 -> 8.5cm x 5.3cm) -->
       <a-video
         src="#camimpeg-video"
         position="0 0 0"
@@ -133,33 +113,21 @@
   </a-scene>
 
   <script>
-    const sceneEl = document.querySelector('a-scene');
-    const startOverlay = document.querySelector('#start-overlay');
-    const startBtn = document.querySelector('#btn-start');
     const video = document.querySelector('#camimpeg-video');
     const cardTarget = document.querySelector('#card-target');
 
-    // Desbloqueo táctil de WebRTC/Audio
-    startBtn.addEventListener('click', async () => {
-      startOverlay.style.display = 'none';
-
-      // Dispara un play/pause mudo inicial para que iOS reconozca el token de interacción de audio
-      try {
-        video.muted = false;
-        await video.play();
-        video.pause();
-        video.currentTime = 0;
-      } catch (err) {
-        console.warn('Reproducción de audio sujeta a restricciones:', err);
+    // Desbloquear audio con el primer toque en cualquier parte de la pantalla
+    document.body.addEventListener('click', () => {
+      if (video.paused && !video.ended) {
+        video.play().catch(() => {});
       }
+    }, { once: true });
 
-      // Arranca el rastreador de MindAR
-      sceneEl.systems['mindar-image-system'].start();
-    });
-
-    // Eventos de trackeo
+    // Control de video al detectar/perder la tarjeta física
     cardTarget.addEventListener('targetFound', () => {
-      video.play().catch(e => console.log('Error al reproducir:', e));
+      video.play().catch((err) => {
+        console.warn('Playback bloqueado por el navegador hasta interacción:', err);
+      });
     });
 
     cardTarget.addEventListener('targetLost', () => {
